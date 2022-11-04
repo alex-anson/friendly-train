@@ -1,0 +1,7 @@
+POST http://localhost:3000/fox HTTP/1.1
+content-type: application/json
+
+{
+    "note": "yyeeahh a super secret note..",
+    "date": "Friday, 4 November 2022"
+}
