@@ -3,15 +3,20 @@ const express = require("express");
 const http = require("http");
 const app = express();
 
-// app.use(express.json()); // for parsing application/json
+app.use(express.json()); // for parsing application/json
 
-const SUPER_SECRET_TOKEN = "cool_token_bro";
+app.use(checkTokenMiddleware);
+
+const SUPER_SECRET_TOKEN = "gw_config_user_token";
 const PORT = 3001;
 // const otherUrl = "http://localhost:3000/example";
 
 const postData = JSON.stringify({ proxy: "from GW server" });
 
-app.post("/example", (_, res) => {
+app.post("/example", (req, res) => {
+  // validate token & get useable data
+  console.log("USER", req["user"]);
+
   const options = {
     // host: "localhost", // localhost is default
     port: 3000,
@@ -20,9 +25,8 @@ app.post("/example", (_, res) => {
     headers: {
       "Content-Type": "application/json",
       "Content-Length": Buffer.byteLength(postData),
-      Token: SUPER_SECRET_TOKEN,
+      Authorization: SUPER_SECRET_TOKEN,
     },
-    // body: postData,
   };
 
   const clientRequest = http.request(options, callback);
@@ -33,12 +37,53 @@ app.post("/example", (_, res) => {
 
 // callback is optional
 function callback(res) {
-  console.log(`STATUS: ${res.statusCode}`);
-  // console.log(`HEADERS: ${JSON.stringify(res.headers)}`);
   res.setEncoding("utf8");
+  console.log(`STATUS: ${res.statusCode}`);
+  res.on("data", function (chunk) {
+    console.log("body: " + chunk);
+  });
+  // console.log(`HEADERS: ${JSON.stringify(res.headers)}`);
   console.log("done");
 }
 
 app.listen(PORT, () => {
   console.log(`listening on port ${PORT}`);
 });
+
+function checkTokenMiddleware(req, res, next) {
+  // console.log(req.headers);
+  if (!req.headers?.authorization) {
+    // user not authenticated
+    return res.status(403).send("byyyeeee");
+  }
+
+  // parse token
+  const parsedToken = req.headers.authorization.split(" ")[1];
+
+  req.user = verifyToken(parsedToken);
+
+  if (!req.user) {
+    return res.status(401).send("user not found");
+  }
+
+  next();
+}
+
+function verifyToken(token) {
+  // decode token
+  const decoded = fakeDB[token];
+
+  // return expected object
+  return decoded;
+}
+
+const fakeDB = {
+  jwt_user_token_2345: {
+    userName: "bro",
+    uid: 12,
+  },
+  shitty_token_bro: {
+    userName: "another user",
+    uid: 11,
+  },
+};
