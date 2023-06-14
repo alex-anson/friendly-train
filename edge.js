@@ -13,6 +13,13 @@ app.post("/example", (req, res) => {
   // req.body -- by default it's undefined. only populated when you use body-parsing
   // middleware -- app.use(express.json())
   console.log("edge device", req.body);
+
+  if (req.headers.token) {
+    console.log("token found in headers. request must be from GW server.");
+  } else {
+    console.log("no token found. request must be from edge device.");
+  }
+
   res.send("SPARKLES from edge");
 });
 
