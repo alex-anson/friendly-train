@@ -4,11 +4,14 @@ const app = express();
 
 const PORT = 3000;
 
-// app.use(express.json());
-// app.use(express.urlencoded({ extended: true }));
+app.use(express.json()); // for parsing application/json
+// ^ MIDDLEWARE
+
+// app.use(express.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
 
 app.post("/example", (req, res) => {
-  // req.body ... get what's coming from gw
+  // req.body -- by default it's undefined. only populated when you use body-parsing
+  // middleware -- app.use(express.json())
   console.log("edge device", req.body);
   res.send("SPARKLES from edge");
 });

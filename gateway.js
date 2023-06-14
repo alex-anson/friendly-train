@@ -3,12 +3,14 @@ const express = require("express");
 const http = require("http");
 const app = express();
 
+// app.use(express.json()); // for parsing application/json
+
 const PORT = 3001;
 // const otherUrl = "http://localhost:3000/example";
 
 const postData = JSON.stringify({ proxy: "from GW server" });
 
-app.post("/example", (req, res) => {
+app.post("/example", () => {
   const options = {
     // host: "localhost", // localhost is default
     port: 3000,
@@ -18,11 +20,12 @@ app.post("/example", (req, res) => {
       "Content-Type": "application/json",
       "Content-Length": Buffer.byteLength(postData),
     },
+    // body: postData,
   };
 
   const clientRequest = http.request(options, callback);
   clientRequest.write(postData);
-  res.json(postData);
+  // res.json(postData);
   clientRequest.end();
 });
 
