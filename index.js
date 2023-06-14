@@ -47,3 +47,11 @@ app.post("/fox", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Example app listening on port ${PORT}`);
 });
+
+/**
+ * cute console.logs
+ console.log(
+  "%c MESSAGE HERE yay",
+  "background: #fff; color: #000"
+);
+ */
