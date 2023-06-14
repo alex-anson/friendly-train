@@ -5,7 +5,7 @@ const app = express();
 
 app.use(express.json()); // for parsing application/json
 
-app.use(checkTokenMiddleware);
+// app.use(checkTokenMiddleware);
 
 const SUPER_SECRET_TOKEN = "gw_config_user_token";
 const PORT = 3001;
@@ -13,9 +13,15 @@ const PORT = 3001;
 
 const postData = JSON.stringify({ proxy: "from GW server" });
 
-app.post("/example", (req, res) => {
+app.post("/example", checkTokenMiddleware, (req, res) => {
   // validate token & get useable data
   console.log("USER", req["user"]);
+
+  if (req["user"]["permissions"]["canPostToExampleRoute"] !== true) {
+    return res
+      .status(403)
+      .send("you don't have permission to post to /example");
+  }
 
   const options = {
     // host: "localhost", // localhost is default
@@ -78,12 +84,35 @@ function verifyToken(token) {
 }
 
 const fakeDB = {
+  // doesn't have permission to talk to edge device
   jwt_user_token_2345: {
     userName: "bro",
     uid: 12,
+    permissions: { canPostToExampleRoute: false },
   },
+  // has permission
   shitty_token_bro: {
     userName: "another user",
     uid: 11,
+    permissions: { canPostToExampleRoute: true },
   },
 };
+
+app.post("/public", (req, res) => {
+  const options = {
+    // host: "localhost", // localhost is default
+    port: 3000,
+    path: "/public",
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(postData),
+      Authorization: SUPER_SECRET_TOKEN,
+    },
+  };
+
+  const clientRequest = http.request(options);
+  clientRequest.write(postData);
+  clientRequest.end();
+  res.end();
+});
