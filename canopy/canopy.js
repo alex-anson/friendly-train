@@ -7,7 +7,10 @@ const program = require("commander").program;
 
 ///////////////////////////////////////
 // #region Setup
-let PORT, isGWMode, GW_TOKEN;
+let PORT;
+let isGWMode;
+/** @type string */
+let GW_TOKEN;
 
 function getCliArgs() {
   program.name("can-o-py");
@@ -20,7 +23,6 @@ function init() {
   const gateway = getCliArgs();
   if (gateway["Gw"]) {
     console.log("starting GW server...");
-    // Contains gw boolean (true), port, and gw token
     const gwConfigBuffer = fs.readFileSync("gw-config.json");
     const gwConfig = JSON.parse(gwConfigBuffer.toString());
 
@@ -29,12 +31,13 @@ function init() {
     GW_TOKEN = gwConfig["gw_token"];
   } else {
     console.log("starting edge server...");
-    // Contains gw boolean (false) and port
     const edgeConfigBuffer = fs.readFileSync("edge-config.json");
     const edgeConfig = JSON.parse(edgeConfigBuffer.toString());
 
     PORT = edgeConfig["port"];
     isGWMode = edgeConfig["gw"];
+    // edge device has access to the gw token. it's the USER who may or may not have it.
+    GW_TOKEN = edgeConfig["gw_token"];
   }
 }
 init();
@@ -45,32 +48,38 @@ const postData = JSON.stringify({ data: "some POST data" });
 
 // MIDDLEWARE
 app.use(express.json());
-app.use(checkTokenMiddleware);
-app.use(authMiddleware);
+if (isGWMode) {
+  app.use(verifyUserTokenMiddleware);
+}
+if (!isGWMode) {
+  app.use(checkForGwTokenMiddleware);
+}
 
 // REQUIRES GW TOKEN
-app.post("/private-route", (req, res) => {
-  if (!isGWMode && req.headers.authorization !== GW_TOKEN) {
-    return res.status(403).send("not authorized");
-  }
+if (isGWMode) {
+  app.post("/private-route-make-biscuits", handleGwBiscuits);
+}
+if (!isGWMode) {
+  app.post("/private-route-make-biscuits", handleEdgeBiscuits);
+}
 
+function handleGwBiscuits(req, res) {
   console.log("UID", req["user"]["uid"]);
 
   // Check permissions.
   if (req["user"]["permissions"]["canPostToPrivateRoute"] !== true) {
     return res
       .status(403)
-      .send("you don't have permission to post to /private-route");
-  }
-  if (req["user"]["permissions"]["canPostToPrivateRoute"] === true) {
-    return res.status(200).send(`access granted, ${req["user"]["userName"]}`);
+      .send(
+        "you don't have permission to post to /private-route-make-biscuits"
+      );
   }
 
   // Forward the request to the edge device.
 
   const options = {
     // port: 4200, // edge device's port
-    url: "http://localhost:4200/private-route",
+    url: "http://localhost:4200/private-route-make-biscuits",
     method: "post",
     headers: {
       "Content-Type": "application/json",
@@ -94,19 +103,23 @@ app.post("/private-route", (req, res) => {
       console.log("ERROR 🔥");
       res.status(400).send("uh oh");
     });
-});
+}
+
+function handleEdgeBiscuits(_, res) {
+  return res.status(200).send("MAKE BISCUITS YAY 🥐");
+}
 
 // No authentication required.
-app.post("/public-route", (_, res) => {
+app.post("/public-route-eat-biscuits", (_, res) => {
   if (!isGWMode) {
-    return res.status(200).send("edge device response 💥");
+    return res.status(200).send("eat biscuits 💥");
   }
 
   // Forward the request to the edge device  ...add the GW token even though it's not required in this case...?
 
   const options = {
     // port: 4200, // edge device's port
-    url: "http://localhost:4200/public-route",
+    url: "http://localhost:4200/public-route-eat-biscuits",
     method: "post",
     headers: {
       "Content-Type": "application/json",
@@ -138,26 +151,21 @@ app.listen(PORT, () => {
 
 ///////////////////////////////////////
 // #region SECTION:  Middleware, helper function, fake DB object
-const publicRouteList = ["/public-route"]; // used to bypass certain middleware.
+const publicRouteList = ["/public-route-eat-biscuits"]; // used to bypass certain middleware.
 
 /**
  * Check if there's a token/if the token matches the GW config token. For authenticating
  * requests to the edge device. If there's no token, can only access public routes.
+ *
+ * Used on edge devices
  */
-function authMiddleware(req, res, next) {
+function checkForGwTokenMiddleware(req, res, next) {
   if (publicRouteList.includes(req.path)) {
-    console.log("route is public. exiting authMiddleware function");
+    console.log("route is public. exiting checkForGwTokenMiddleware function");
     return next();
   }
 
-  // cheating?
-  if (isGWMode) {
-    console.log("is gw mode. skipping auth middleware ƒn");
-    return next();
-  }
-
-  console.log("auth middleware running...");
-
+  console.log("check for gw token middleware running...");
   if (req.headers?.["authorization"] !== GW_TOKEN) {
     return res.status(403).send("wrong token or no token present");
   }
@@ -166,13 +174,16 @@ function authMiddleware(req, res, next) {
   next();
 }
 
-/** Decode and verify user's JWT token. Add user object to request. */
-function checkTokenMiddleware(req, res, next) {
+/**
+ * WHO is sending the request .. intended to be used on GW device
+ * Decode and verify user's JWT token. Add user object to request.
+ */
+function verifyUserTokenMiddleware(req, res, next) {
   if (publicRouteList.includes(req.path)) {
-    console.log("route is public. exiting checkTokenMiddleware function");
+    console.log("route is public. exiting verifyUserTokenMiddleware function");
     return next();
   }
-  console.log("check token middleware running...");
+  console.log("verify user token middleware running...");
 
   if (!req.headers?.authorization) {
     // no token present

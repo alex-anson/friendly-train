@@ -1,4 +1,5 @@
 {
     "port": 4200,
-    "gw": false
+    "gw": false,
+    "gw_token": "gw_config_user_token"
 }
