@@ -1,0 +1,45 @@
+POST http://localhost:3000/private-route HTTP/1.1
+content-type: application/json
+
+{
+
+}
+
+### 
+
+POST http://localhost:3001/private-route HTTP/1.1
+content-type: application/json
+authorization: bearer jwt_user_token_2345
+
+{
+
+}
+
+### 
+
+POST http://localhost:3001/private-route HTTP/1.1
+content-type: application/json
+authorization: bearer shitty_token_bro
+
+{
+
+}
+
+
+### 
+
+POST http://localhost:3000/public-route HTTP/1.1
+content-type: application/json
+
+{
+
+}
+
+### 
+
+POST http://localhost:3001/public HTTP/1.1
+content-type: application/json
+
+{
+
+}
