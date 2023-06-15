@@ -1,8 +1,9 @@
+// @ts-check
 const express = require("express");
 const app = express();
-const http = require("http"); // (LATER) mutate the request object + use axios, instead of using the http module?
+const axios = require("axios").default;
 const fs = require("fs");
-const program = require("commander");
+const program = require("commander").program;
 
 ///////////////////////////////////////
 // #region Setup
@@ -40,6 +41,8 @@ init();
 // #endregion Setup
 ///////////////////////////////////////
 
+const postData = JSON.stringify({ data: "some POST data" });
+
 // MIDDLEWARE
 app.use(express.json());
 app.use(authMiddleware);
@@ -75,9 +78,9 @@ app.post("/private-route", (req, res) => {
     },
   };
 
-  const clientRequest = http.request(options, callback);
-  clientRequest.write(postData);
-  clientRequest.end();
+  // const clientRequest = http.request(options, callback);
+  // clientRequest.write(postData);
+  // clientRequest.end();
   res.end();
 });
 
@@ -91,20 +94,34 @@ app.post("/public-route", (req, res) => {
   // Forward the request to the edge device  ...add the GW token even though it's not required in this case...?
 
   const options = {
-    port: 4200, // edge device's port
-    path: "/public-route",
-    method: "POST",
+    // port: 4200, // edge device's port
+    url: "http://localhost:4200/public-route",
+    method: "post",
     headers: {
       "Content-Type": "application/json",
       "Content-Length": Buffer.byteLength(postData),
       Authorization: GW_TOKEN,
     },
+    data: postData,
+    // transformRequest: [
+    //   function (data, headers) {
+    //     // Do whatever you want to transform the data
+
+    //     return data;
+    //   },
+    // ],
   };
 
-  const clientRequest = http.request(options);
-  clientRequest.write(postData);
-  clientRequest.end();
-  res.end();
+  axios(options)
+    .then((res) => {
+      console.log(res.config.headers);
+      console.log(res.statusText);
+      console.log("DATA 🔥", res.data);
+    })
+    .catch((e) => {
+      console.log(e);
+      console.log("ERROR 🔥");
+    });
 
   console.log("edge device PUBLIC route", req.body);
 
@@ -114,19 +131,6 @@ app.post("/public-route", (req, res) => {
 app.listen(PORT, () => {
   console.log(`listening on port ${PORT}`);
 });
-
-// ------------------------------------
-
-const postData = JSON.stringify({ proxy: "from GW server" });
-
-// callback is optional
-function callback(res) {
-  res.setEncoding("utf8");
-  console.log(`STATUS: ${res.statusCode}`);
-  res.on("data", function (chunk) {
-    console.log("body: " + chunk);
-  });
-}
 
 ///////////////////////////////////////
 // #region SECTION:  Middleware, helper function, fake DB object
