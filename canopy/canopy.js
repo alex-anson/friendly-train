@@ -1,47 +1,57 @@
-// @ts-check
 const express = require("express");
 const app = express();
 const http = require("http"); // (LATER) mutate the request object + use axios, instead of using the http module?
 const fs = require("fs");
+const program = require("commander");
 
-// Contains gw boolean, port, and gw token
-const configBuffer = fs.readFileSync("canopy-config.json");
-const configuration = JSON.parse(configBuffer.toString());
+///////////////////////////////////////
+// #region Setup
+let PORT, isGWMode, GW_TOKEN;
 
-const PORT = configuration["port"];
-// Will only be present if gw is true
-const GW_TOKEN = configuration["gw_token"];
+function getCliArgs() {
+  program.name("can-o-py");
+  program.option("-gw", "start server in gateway mode");
+  program.parse(process.argv);
+  return program.opts();
+}
+
+function init() {
+  const gateway = getCliArgs();
+  if (gateway["Gw"]) {
+    console.log("starting GW server...");
+    // Contains gw boolean (true), port, and gw token
+    const gwConfigBuffer = fs.readFileSync("gw-config.json");
+    const gwConfig = JSON.parse(gwConfigBuffer.toString());
+
+    PORT = gwConfig["port"];
+    isGWMode = gwConfig["gw"];
+    GW_TOKEN = gwConfig["gw_token"];
+  } else {
+    console.log("starting edge server...");
+    // Contains gw boolean (false) and port
+    const edgeConfigBuffer = fs.readFileSync("edge-config.json");
+    const edgeConfig = JSON.parse(edgeConfigBuffer.toString());
+
+    PORT = edgeConfig["port"];
+    isGWMode = edgeConfig["gw"];
+  }
+}
+init();
+// #endregion Setup
+///////////////////////////////////////
 
 // MIDDLEWARE
 app.use(express.json());
 app.use(authMiddleware);
 app.use(checkTokenMiddleware);
 
-// how to determine if it's from the gateway....
-// how to determine if it's something we want to proxy/forward.....
-
 // REQUIRES GW TOKEN
 app.post("/private-route", (req, res) => {
-  // req.body -- by default it's undefined. only populated when you use body-parsing
-  // middleware -- app.use(express.json())
-  console.log("edge device", req.body);
-});
+  if (!isGWMode) {
+    // if we're not in gw mode, they don't have a gw token. and they can't post to this route.
+    return res.status(403).send("not authorized");
+  }
 
-app.post("/public-route", (req, res) => {
-  console.log("edge device PUBLIC route", req.body);
-
-  return res.status(200).send("SPARKLES from edge");
-});
-
-app.listen(PORT, () => {
-  console.log(`listening on port ${PORT}`);
-});
-
-// ------------------------------------
-
-const postData = JSON.stringify({ proxy: "from GW server" });
-
-app.post("/example", (req, res) => {
   console.log("UID", req["user"]["uid"]);
 
   // Check permissions.
@@ -51,10 +61,12 @@ app.post("/example", (req, res) => {
       .send("you don't have permission to post to /private-route");
   }
 
+  // Forward the request to the edge device.
+
   const options = {
     // host: "localhost", // localhost is default
-    port: 3000,
-    path: "/example",
+    port: PORT,
+    path: "/private-route",
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -69,20 +81,18 @@ app.post("/example", (req, res) => {
   res.end();
 });
 
-// callback is optional
-function callback(res) {
-  res.setEncoding("utf8");
-  console.log(`STATUS: ${res.statusCode}`);
-  res.on("data", function (chunk) {
-    console.log("body: " + chunk);
-  });
-}
+// No authentication required.
+app.post("/public-route", (req, res) => {
+  if (!isGWMode) {
+    console.log("not in GW mode - request made directly from an edge device");
+    return res.status(200).send("💥 edge device response");
+  }
 
-app.post("/public", (req, res) => {
+  // Forward the request to the edge device  ...add the GW token even though it's not required in this case...?
+
   const options = {
-    // host: "localhost", // localhost is default
-    port: 3000,
-    path: "/public",
+    port: 4200, // edge device's port
+    path: "/public-route",
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -95,10 +105,31 @@ app.post("/public", (req, res) => {
   clientRequest.write(postData);
   clientRequest.end();
   res.end();
+
+  console.log("edge device PUBLIC route", req.body);
+
+  return res.status(200).send("SPARKLES from edge");
 });
 
+app.listen(PORT, () => {
+  console.log(`listening on port ${PORT}`);
+});
+
+// ------------------------------------
+
+const postData = JSON.stringify({ proxy: "from GW server" });
+
+// callback is optional
+function callback(res) {
+  res.setEncoding("utf8");
+  console.log(`STATUS: ${res.statusCode}`);
+  res.on("data", function (chunk) {
+    console.log("body: " + chunk);
+  });
+}
+
 ///////////////////////////////////////
-// Middleware, helper function, fake DB object
+// #region SECTION:  Middleware, helper function, fake DB object
 const publicRouteList = ["/public-route"]; // used to bypass certain middleware.
 
 /**
@@ -166,3 +197,4 @@ const fakeDB = {
     permissions: { canPostToPrivateRoute: true },
   },
 };
+// #endregion  Middleware, helper function, fake DB object
