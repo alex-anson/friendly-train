@@ -1,10 +1,23 @@
 POST http://localhost:4000/private-route HTTP/1.1
 content-type: application/json
-authorization: bearer jwt_user_token_2345
+authorization: bearer jwt_user_token_2345 
+# ^ this user lacks the necessary permissions
 
 {
 
 }
+
+###
+
+POST http://localhost:4000/private-route HTTP/1.1
+content-type: application/json
+authorization: bearer jwt_user_token_1234 
+# ^ this user has permission
+
+{
+
+}
+
 
 ### 
 
@@ -29,15 +42,6 @@ authorization: bearer jwt_user_token_2345
 ### 
 
 POST http://localhost:4200/public-route HTTP/1.1
-content-type: application/json
-
-{
-
-}
-
-### 
-
-POST http://localhost:3001/public HTTP/1.1
 content-type: application/json
 
 {

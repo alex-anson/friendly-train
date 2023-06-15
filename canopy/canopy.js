@@ -45,13 +45,12 @@ const postData = JSON.stringify({ data: "some POST data" });
 
 // MIDDLEWARE
 app.use(express.json());
-app.use(authMiddleware);
 app.use(checkTokenMiddleware);
+app.use(authMiddleware);
 
 // REQUIRES GW TOKEN
 app.post("/private-route", (req, res) => {
-  if (!isGWMode) {
-    // if we're not in gw mode, they don't have a gw token. and they can't post to this route.
+  if (!isGWMode && req.headers.authorization !== GW_TOKEN) {
     return res.status(403).send("not authorized");
   }
 
@@ -63,29 +62,42 @@ app.post("/private-route", (req, res) => {
       .status(403)
       .send("you don't have permission to post to /private-route");
   }
+  if (req["user"]["permissions"]["canPostToPrivateRoute"] === true) {
+    return res.status(200).send(`access granted, ${req["user"]["userName"]}`);
+  }
 
   // Forward the request to the edge device.
 
   const options = {
-    // host: "localhost", // localhost is default
-    port: PORT,
-    path: "/private-route",
-    method: "POST",
+    // port: 4200, // edge device's port
+    url: "http://localhost:4200/private-route",
+    method: "post",
     headers: {
       "Content-Type": "application/json",
       "Content-Length": Buffer.byteLength(postData),
       Authorization: GW_TOKEN,
     },
+    data: postData,
   };
 
-  // const clientRequest = http.request(options, callback);
-  // clientRequest.write(postData);
-  // clientRequest.end();
-  res.end();
+  axios(options)
+    .then((axRes) => {
+      console.log(axRes.config.headers);
+      console.log(axRes.statusText);
+      console.log("DATA 🔥", axRes.data);
+      res
+        .status(200)
+        .send(`response via gateway forwarded request: ${axRes.data}`);
+    })
+    .catch((e) => {
+      console.log(e);
+      console.log("ERROR 🔥");
+      res.status(400).send("uh oh");
+    });
 });
 
 // No authentication required.
-app.post("/public-route", (req, res) => {
+app.post("/public-route", (_, res) => {
   if (!isGWMode) {
     return res.status(200).send("edge device response 💥");
   }
@@ -109,11 +121,14 @@ app.post("/public-route", (req, res) => {
       console.log(axRes.config.headers);
       console.log(axRes.statusText);
       console.log("DATA 🔥", axRes.data);
-      res.status(200).send(axRes.data);
+      res
+        .status(200)
+        .send(`response via gateway forwarded request: ${axRes.data}`);
     })
     .catch((e) => {
       console.log(e);
       console.log("ERROR 🔥");
+      res.status(400).send("uh oh");
     });
 });
 
@@ -135,7 +150,14 @@ function authMiddleware(req, res, next) {
     return next();
   }
 
+  // cheating?
+  if (isGWMode) {
+    console.log("is gw mode. skipping auth middleware ƒn");
+    return next();
+  }
+
   console.log("auth middleware running...");
+
   if (req.headers?.["authorization"] !== GW_TOKEN) {
     return res.status(403).send("wrong token or no token present");
   }
@@ -150,6 +172,7 @@ function checkTokenMiddleware(req, res, next) {
     console.log("route is public. exiting checkTokenMiddleware function");
     return next();
   }
+  console.log("check token middleware running...");
 
   if (!req.headers?.authorization) {
     // no token present
@@ -179,13 +202,13 @@ function verifyToken(token) {
 const fakeDB = {
   // doesn't have permission to talk to edge device
   jwt_user_token_2345: {
-    userName: "bro",
+    userName: "John Smith",
     uid: 12,
     permissions: { canPostToPrivateRoute: false },
   },
   // has permission
   jwt_user_token_1234: {
-    userName: "another user",
+    userName: "Jane Smith",
     uid: 11,
     permissions: { canPostToPrivateRoute: true },
   },
