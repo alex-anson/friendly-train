@@ -87,8 +87,7 @@ app.post("/private-route", (req, res) => {
 // No authentication required.
 app.post("/public-route", (req, res) => {
   if (!isGWMode) {
-    console.log("not in GW mode - request made directly from an edge device");
-    return res.status(200).send("💥 edge device response");
+    return res.status(200).send("edge device response 💥");
   }
 
   // Forward the request to the edge device  ...add the GW token even though it's not required in this case...?
@@ -103,29 +102,19 @@ app.post("/public-route", (req, res) => {
       Authorization: GW_TOKEN,
     },
     data: postData,
-    // transformRequest: [
-    //   function (data, headers) {
-    //     // Do whatever you want to transform the data
-
-    //     return data;
-    //   },
-    // ],
   };
 
   axios(options)
-    .then((res) => {
-      console.log(res.config.headers);
-      console.log(res.statusText);
-      console.log("DATA 🔥", res.data);
+    .then((axRes) => {
+      console.log(axRes.config.headers);
+      console.log(axRes.statusText);
+      console.log("DATA 🔥", axRes.data);
+      res.status(200).send(axRes.data);
     })
     .catch((e) => {
       console.log(e);
       console.log("ERROR 🔥");
     });
-
-  console.log("edge device PUBLIC route", req.body);
-
-  return res.status(200).send("SPARKLES from edge");
 });
 
 app.listen(PORT, () => {
